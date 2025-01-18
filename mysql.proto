@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package syss.sqlschema.v1;
+
+option go_package = "github.com/syss-io/sql-schema";
+
+message MySQLServerInfo {
+    message Configuration {
+      string name = 1;
+      string value = 2;
+    }
+    
+    string version = 1;
+    repeated Configuration configurations = 3;
+}
+
+message MySQLDatabaseDefinition {
+    string database_name = 1;
+    repeated MySQLTableDefinition tables = 2;
+    repeated MySQLFunctionDefinition functions = 3;
+    repeated MySQLStoredProceduresDefinition stored_procedures = 4;
+    repeated MySQLTriggerDefinition triggers = 5;
+    repeated MySQLViewDefinition views = 6;
+}
+
+message MySQLTriggerDefinition {
+    string database_name = 1;
+    string table_name = 2;
+    string trigger_name = 3;
+    string event_manipulation = 4;
+    string action_timing = 5;
+    string action_orientation = 6;
+    string action_statement = 7;
+}
+
+message MySQLFunctionDefinition {
+    string database_name = 1;
+    string function_name = 2;
+    string return_type = 3;
+    string data_type = 4;
+    string definition = 5;
+    string language = 8;
+    string comment = 9;
+}
+
+message MySQLStoredProceduresDefinition {
+    string database_name = 1;
+    string procedure_name = 2;
+    string definition = 3;
+    string language = 4;
+    string comment = 5;
+}
+
+message MySQLForeignKeyDefinition {
+    string database_name = 1;
+    string table_name = 2;
+    string column_name = 3;
+    string foreign_table_name = 4;
+    string foreign_column_name = 5;
+    string constraint_name = 6;
+    string on_update = 7;
+    string on_delete = 8;
+}
+
+message MySQLIndexDefinition {
+    string database_name = 1;
+    string table_name = 2;
+    string index_name = 3;
+    repeated string column_names = 4;
+    string algorithm = 5;
+    string constraint_type = 6;
+    bool is_unique = 7;
+    bool is_primary = 8;
+    bool is_partial = 9;
+    optional string comment = 10;
+}
+
+message MySQLColumnDefinition {
+    string table_name = 1;
+    string name = 2;
+    string type = 3;
+    bool is_nullable = 4;
+    string default_value = 5;
+    string charset = 6;
+    string collation = 7;
+    string extra = 8;
+    string comment = 9;
+    repeated MySQLForeignKeyDefinition foreign_keys = 10;
+    repeated MySQLIndexDefinition indexes = 11;
+}
+
+message MySQLViewDefinition {
+    string database_name = 1;
+    string view_name = 2;
+    string definition = 3;
+    repeated MySQLColumnDefinition columns = 4;
+    bool is_updatable = 5;
+}
+
+message MySQLTableDefinition {
+    string database_name = 1;
+    string table_name = 2;
+    repeated MySQLColumnDefinition columns = 3;
+    repeated MySQLIndexDefinition indexes = 4;
+    repeated MySQLForeignKeyDefinition foreign_keys = 5;
+    repeated MySQLTriggerDefinition triggers = 6;
+    repeated MySQLFunctionDefinition functions = 7;
+    repeated MySQLStoredProceduresDefinition stored_procedures = 8;
+    repeated MySQLViewDefinition views = 9;
+    string comment = 10;
+}

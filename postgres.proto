@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package syss.sqlschema.v1;
+
+option go_package = "github.com/syss-io/sql-schema";
+
+message PostgresServerInfo {
+  message Configuration {
+    string name = 1;
+    string category = 2;
+    string value = 3;
+    string unit = 4;
+    string description = 5;
+  }
+  
+  string version_full = 1;
+  int32 version_number = 2;
+  repeated Configuration configurations = 3;
+}
+
+message PostgresDatabase {
+  string name = 1;
+  repeated PostgresSchemaDefinition schemas = 2;
+}
+
+message PostgresSchemaDefinition {
+  string schema_name = 1;
+  string database_name = 2;
+  repeated PostgresTableDefinition tables = 3;
+  repeated PostgresFunctionDefinition functions = 4;
+  repeated PostgresProcedureDefinition procedures = 5;
+  repeated PostgresViewDefinition views = 6;
+  repeated PostgresMaterializedViewDefinition materialized_views = 7;
+  optional string comment = 8;
+} 
+
+message PostgresTableDefinition {
+  string schema_name = 1;
+  string table_name = 2;
+  repeated PostgresColumnDefinition columns = 3;
+  repeated PostgresForeignKeyDefinition foreign_keys = 4;
+  repeated PostgresIndexDefinition indexes = 5;
+  repeated PostgresTriggerDefinition triggers = 6;
+  optional string comment = 7;
+}
+
+message PostgresColumnDefinition {
+  string schema_name = 1;
+  string table_name = 2;
+  string column_name = 3;
+  string data_type = 4;
+  bool is_nullable = 5;
+  optional string default_value = 6;
+  bool is_primary = 7;
+  bool is_unique = 8;
+  bool is_autoincrement = 9;
+  optional int64 character_maximum_length = 10;
+  optional string comment = 11;
+  repeated PostgresForeignKeyDefinition foreign_keys = 12;
+  repeated PostgresIndexDefinition indexes = 13;
+}
+
+message PostgresForeignKeyDefinition {
+  string schema_name = 1;
+  string table_name = 2;
+  string column_name = 3;
+  string foreign_table_name = 4;
+  string foreign_column_name = 5;
+  string constraint_name = 6;
+  string on_update = 7;
+  string on_delete = 8;
+  string validation = 9;
+  bool is_initially_deferred = 10;
+}
+
+message PostgresIndexDefinition {
+  string schema_name = 1;
+  string table_name = 2;
+  string index_name = 3;
+  repeated string column_names = 4;
+  string algorithm = 5;
+  string definition = 6;
+  string constraint_type = 7;
+  bool is_unique = 8;
+  bool is_primary = 9;
+  bool is_partial = 10;
+  string condition = 11;
+  string include = 12;
+  string comment = 13;
+}
+
+message PostgresFunctionDefinition {
+  message Argument {
+    string name = 1;
+    string type = 2;
+    bool is_variadic = 3;
+    bool is_nullable = 4;
+    string default_value = 5;
+  }
+
+  string schema_name = 1;
+  string function_name = 2;
+  string return_type = 3;
+  string definition = 4;
+
+  repeated Argument arguments = 5;
+  optional string language = 6;
+  optional string comment = 7;
+}
+
+message PostgresProcedureDefinition {
+  message Argument {
+    string name = 1;
+    string type = 2;
+    bool is_variadic = 3;
+    bool is_nullable = 4;
+    string default_value = 5;
+  }
+
+  string schema_name = 1;
+  string procedure_name = 2;
+  string definition = 3;
+
+  repeated Argument arguments = 4;
+  optional string language = 5;
+  optional string comment = 6;
+}
+
+
+message PostgresTriggerDefinition {
+  string schema_name = 1;
+  string table_name = 2;
+  string trigger_name = 3;
+  string event = 4;
+  string when = 5;
+  string statement = 6;
+  optional string condition = 7;
+  optional string comment = 8;
+}
+
+message PostgresViewDefinition {
+  string schema_name = 1;
+  string table_name = 2;
+  string definition = 3;
+  repeated PostgresColumnDefinition columns = 4;
+  bool is_updatable = 5;
+}
+
+message PostgresMaterializedViewDefinition {
+  string schema_name = 1;
+  string table_name = 2;
+  string definition = 3;
+  repeated PostgresColumnDefinition columns = 4;
+}
