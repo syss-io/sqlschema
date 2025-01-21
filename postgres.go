@@ -1,4 +1,4 @@
-package sql_schema
+package sqlschema
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func (p *PostgresServer) DescribeServer(ctx context.Context) (*PostgresServerInf
 		slog.WarnContext(ctx, "can't fetch server version. expected number got "+versionNumber)
 	}
 
-	configurations, err := p.getPostgresServerConfigurations(ctx)
+	configurations, err := p.getServerConfigurations(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get server configurations: %w", err)
 	}
@@ -86,7 +86,7 @@ func (p *PostgresServer) DescribeAvailableDatabases(ctx context.Context) ([]stri
 // AvailableSchemas retrieves the list of available schemas in the given database.
 //
 // See https://www.postgresql.org/docs/current/infoschema-schemata.html
-func (p *PostgresServer) AvailableSchemas(ctx context.Context, database string) ([]string, error) {
+func (p *PostgresServer) DescribeAvailableSchemas(ctx context.Context, database string) ([]string, error) {
 	query := "SELECT schema_name FROM information_schema.schemata WHERE catalog_name = $1;"
 
 	rows, err := p.conn.QueryContext(ctx, query, database)
@@ -111,7 +111,7 @@ func (p *PostgresServer) AvailableSchemas(ctx context.Context, database string) 
 	return schemas, nil
 }
 
-func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema string) (*PostgresSchemaDefinition, error) {
+func (p *PostgresServer) DescribeSchema(ctx context.Context, schema string) (*PostgresSchemaDefinition, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -132,7 +132,7 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 
 	// Fetch schema foreign keys..
 	g.Go(func() error {
-		foreignKeys, err := p.GetPostgresSchemaForeignKeys(gctx, schema)
+		foreignKeys, err := p.getSchemaForeignKeys(gctx, schema)
 		if err != nil {
 			return fmt.Errorf("can't fetch schema foreign keys: %w", err)
 		}
@@ -143,7 +143,7 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 
 	// Fetch schema functions..
 	g.Go(func() error {
-		functions, err := p.GetPostgresSchemaFunctions(gctx, schema)
+		functions, err := p.getSchemaFunctions(gctx, schema)
 		if err != nil {
 			return fmt.Errorf("can't fetch schema functions: %w", err)
 		}
@@ -154,7 +154,7 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 
 	// Fetch schema procedures..
 	g.Go(func() error {
-		procedures, err := p.GetPostgresSchemaProcedures(gctx, schema)
+		procedures, err := p.getSchemaProcedures(gctx, schema)
 		if err != nil {
 			return fmt.Errorf("can't fetch schema procedures: %w", err)
 		}
@@ -165,7 +165,7 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 
 	// Fetch schema triggers..
 	g.Go(func() error {
-		triggers, err := p.GetPostgresSchemaTriggers(gctx, schema)
+		triggers, err := p.getSchemaTriggers(gctx, schema)
 
 		if err != nil {
 			return fmt.Errorf("can't fetch schema triggers: %w", err)
@@ -190,14 +190,14 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 		return nil, err
 	}
 
-	columns, err := p.GetPostgresSchemaColumns(ctx, schema, schemaForeignKeys, schemaIndexes)
+	columns, err := p.getSchemaColumns(ctx, schema, schemaForeignKeys, schemaIndexes)
 	if err != nil {
 		return nil, fmt.Errorf("can't fetch schema columns: %w", err)
 	}
 
 	// Fetch schema tables..
 	g.Go(func() error {
-		tables, err := p.GetPostgresSchemaTables(ctx, schema, columns, schemaForeignKeys, schemaIndexes, schemaTriggers)
+		tables, err := p.getSchemaTables(ctx, schema, columns, schemaForeignKeys, schemaIndexes, schemaTriggers)
 		if err != nil {
 			return fmt.Errorf("can't fetch schema tables: %w", err)
 		}
@@ -208,7 +208,7 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 
 	// fetch schema views..
 	g.Go(func() error {
-		views, err := p.GetPostgresSchemaViews(ctx, schema, columns)
+		views, err := p.getSchemaViews(ctx, schema, columns)
 		if err != nil {
 			return fmt.Errorf("can't fetch schema views: %w", err)
 		}
@@ -219,7 +219,7 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 
 	// fetch schema materialised views
 	g.Go(func() error {
-		matViews, err := p.GetPostgresSchemaMaterializedViews(ctx, schema, columns)
+		matViews, err := p.getSchemaMaterializedViews(ctx, schema, columns)
 		if err != nil {
 			return fmt.Errorf("can't fetch schema materialized views: %w", err)
 		}
@@ -249,7 +249,68 @@ func (p *PostgresServer) GetPostgresSchemaDefinition(ctx context.Context, schema
 	}, nil
 }
 
-func (p *PostgresServer) GetPostgresSchemaTables(ctx context.Context, schema string, columns []*PostgresColumnDefinition, foreignKeys []*PostgresForeignKeyDefinition, indexes []*PostgresIndexDefinition, triggers []*PostgresTriggerDefinition) ([]*PostgresTableDefinition, error) {
+func (p *PostgresServer) DescribeSchemaTables(ctx context.Context, schema string) ([]*PostgresTableDefinition, error) {
+	var (
+		schemaForeignKeys []*PostgresForeignKeyDefinition
+		schemaIndexes     []*PostgresIndexDefinition
+		schemaTriggers    []*PostgresTriggerDefinition
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	// Fetch schema foreign keys..
+	g.Go(func() error {
+		foreignKeys, err := p.getSchemaForeignKeys(gctx, schema)
+		if err != nil {
+			return fmt.Errorf("can't fetch schema foreign keys: %w", err)
+		}
+
+		schemaForeignKeys = foreignKeys
+		return nil
+	})
+
+	// Fetch schema indexes..
+	// g.Go(func() error {
+	// 	indexes, err := p.GetPostgresSchemaIndexes(ctx, schema)
+	// 	if err != nil {
+	// 		return fmt.Errorf("can't fetch schema indexes: %w", err)
+	// 	}
+
+	// 	schemaIndexes = indexes
+	// 	return nil
+	// })
+
+	// Fetch schema triggers..
+	g.Go(func() error {
+		triggers, err := p.getSchemaTriggers(gctx, schema)
+
+		if err != nil {
+			return fmt.Errorf("can't fetch schema triggers: %w", err)
+		}
+
+		schemaTriggers = triggers
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	columns, err := p.getSchemaColumns(ctx, schema, schemaForeignKeys, schemaIndexes)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema columns: %w", err)
+	}
+
+	tables, err := p.getSchemaTables(ctx, schema, columns, schemaForeignKeys, schemaIndexes, schemaTriggers)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema tables: %w", err)
+
+	}
+
+	return tables, nil
+}
+
+func (p *PostgresServer) getSchemaTables(ctx context.Context, schema string, columns []*PostgresColumnDefinition, foreignKeys []*PostgresForeignKeyDefinition, indexes []*PostgresIndexDefinition, triggers []*PostgresTriggerDefinition) ([]*PostgresTableDefinition, error) {
 	query := `
 		SELECT 
 			table_name 
@@ -276,10 +337,10 @@ func (p *PostgresServer) GetPostgresSchemaTables(ctx context.Context, schema str
 		table := &PostgresTableDefinition{
 			SchemaName:  schema,
 			TableName:   tableName,
-			Columns:     p.postgresFilterColumns(columns, tableName),
-			ForeignKeys: p.postgresFilterForeignKeys(foreignKeys, tableName, ""),
-			Indexes:     p.postgresFilterIndexes(indexes, tableName, ""),
-			Triggers:    p.postgresFilterTriggers(triggers, tableName),
+			Columns:     p.filterColumns(columns, tableName),
+			ForeignKeys: p.filterForeignKeys(foreignKeys, tableName, ""),
+			Indexes:     p.filterIndexes(indexes, tableName, ""),
+			Triggers:    p.filterTriggers(triggers, tableName),
 		}
 
 		tables = append(tables, table)
@@ -292,7 +353,7 @@ func (p *PostgresServer) GetPostgresSchemaTables(ctx context.Context, schema str
 	return tables, nil
 }
 
-// p.GetPostgresSchemaFunctions retrieves the functions in the specified schema from the Postgres database.
+// getSchemaFunctions retrieves the functions in the specified schema from the Postgres database.
 //
 // This function is using information_schema.routines to filters
 // out schema functions and system cataloginformation functions
@@ -300,7 +361,7 @@ func (p *PostgresServer) GetPostgresSchemaTables(ctx context.Context, schema str
 //
 // pg_get_functiondef - Reconstructs the creating command for a function or procedure.
 // pg_get_function_result - Reconstructs the RETURNS clause of a function, in the form it would need to appear in within CREATE FUNCTION.
-func (p *PostgresServer) GetPostgresSchemaFunctions(ctx context.Context, schema string) ([]*PostgresFunctionDefinition, error) {
+func (p *PostgresServer) getSchemaFunctions(ctx context.Context, schema string) ([]*PostgresFunctionDefinition, error) {
 	// Query to fetch function names, return type, and definitions
 	query := `
 		SELECT 
@@ -341,8 +402,8 @@ func (p *PostgresServer) GetPostgresSchemaFunctions(ctx context.Context, schema 
 	return functions, nil
 }
 
-// p.GetPostgresSchemaForeignKeys fetches foreign keys for a given schema from the PostgreSQL database.
-func (p *PostgresServer) GetPostgresSchemaForeignKeys(ctx context.Context, schema string) ([]*PostgresForeignKeyDefinition, error) {
+// p.getSchemaForeignKeys fetches foreign keys for a given schema from the PostgreSQL database.
+func (p *PostgresServer) getSchemaForeignKeys(ctx context.Context, schema string) ([]*PostgresForeignKeyDefinition, error) {
 	// Define the query
 	sqlQuery := `
 		SELECT
@@ -421,7 +482,7 @@ func (p *PostgresServer) GetPostgresSchemaForeignKeys(ctx context.Context, schem
 }
 
 // GetViews fetches view definitions for a schema and associates them with columns.
-func (p *PostgresServer) GetPostgresSchemaViews(ctx context.Context, schema string, columns []*PostgresColumnDefinition) ([]*PostgresViewDefinition, error) {
+func (p *PostgresServer) getSchemaViews(ctx context.Context, schema string, columns []*PostgresColumnDefinition) ([]*PostgresViewDefinition, error) {
 	query := `
 		SELECT 
 			t.table_name,
@@ -464,7 +525,7 @@ func (p *PostgresServer) GetPostgresSchemaViews(ctx context.Context, schema stri
 			TableName:   tableName,
 			IsUpdatable: isUpdatable == "YES",
 			Definition:  viewDefinition,
-			Columns:     p.postgresFilterColumns(columns, tableName),
+			Columns:     p.filterColumns(columns, tableName),
 		}
 
 		views = append(views, view)
@@ -478,7 +539,7 @@ func (p *PostgresServer) GetPostgresSchemaViews(ctx context.Context, schema stri
 }
 
 // GetMaterializedViews fetches materialized view definitions for a schema and associates them with columns.
-func (p *PostgresServer) GetPostgresSchemaMaterializedViews(ctx context.Context, schema string, columns []*PostgresColumnDefinition) ([]*PostgresMaterializedViewDefinition, error) {
+func (p *PostgresServer) getSchemaMaterializedViews(ctx context.Context, schema string, columns []*PostgresColumnDefinition) ([]*PostgresMaterializedViewDefinition, error) {
 	query := `
 		SELECT 
 			mv.matviewname AS materialized_view_name,
@@ -507,7 +568,7 @@ func (p *PostgresServer) GetPostgresSchemaMaterializedViews(ctx context.Context,
 			SchemaName: schema,
 			TableName:  viewName,
 			Definition: viewDefinition,
-			Columns:    p.postgresFilterColumns(columns, viewName),
+			Columns:    p.filterColumns(columns, viewName),
 		}
 
 		materializedViews = append(materializedViews, view)
@@ -520,8 +581,8 @@ func (p *PostgresServer) GetPostgresSchemaMaterializedViews(ctx context.Context,
 	return materializedViews, nil
 }
 
-// p.GetPostgresSchemaColumns fetches column definitions for a schema and associates them with foreign keys and indexes.
-func (p *PostgresServer) GetPostgresSchemaColumns(ctx context.Context, schema string, foreignKeys []*PostgresForeignKeyDefinition, indexes []*PostgresIndexDefinition) ([]*PostgresColumnDefinition, error) {
+// p.getSchemaColumns fetches column definitions for a schema and associates them with foreign keys and indexes.
+func (p *PostgresServer) getSchemaColumns(ctx context.Context, schema string, foreignKeys []*PostgresForeignKeyDefinition, indexes []*PostgresIndexDefinition) ([]*PostgresColumnDefinition, error) {
 	query := `
 		SELECT 
 			c.relname AS table_name,
@@ -576,10 +637,10 @@ func (p *PostgresServer) GetPostgresSchemaColumns(ctx context.Context, schema st
 			ColumnName:  columnName,
 			DataType:    dataType,
 			IsNullable:  isNullable == "YES",
-			IsPrimary:   p.postgresIsPrimary(indexes, tableName, columnName),
-			IsUnique:    p.postgresIsUnique(indexes, tableName, columnName),
-			ForeignKeys: p.postgresFilterForeignKeys(foreignKeys, tableName, columnName),
-			Indexes:     p.postgresFilterIndexes(indexes, tableName, columnName),
+			IsPrimary:   p.isPrimary(indexes, tableName, columnName),
+			IsUnique:    p.isUnique(indexes, tableName, columnName),
+			ForeignKeys: p.filterForeignKeys(foreignKeys, tableName, columnName),
+			Indexes:     p.filterIndexes(indexes, tableName, columnName),
 		}
 
 		if columnDefault.Valid {
@@ -600,7 +661,7 @@ func (p *PostgresServer) GetPostgresSchemaColumns(ctx context.Context, schema st
 	return columns, nil
 }
 
-func (p *PostgresServer) GetPostgresSchemaProcedures(ctx context.Context, schema string) ([]*PostgresProcedureDefinition, error) {
+func (p *PostgresServer) getSchemaProcedures(ctx context.Context, schema string) ([]*PostgresProcedureDefinition, error) {
 	sqlQuery := `
 		SELECT 
 			r.routine_name AS procedure_name,
@@ -635,7 +696,7 @@ func (p *PostgresServer) GetPostgresSchemaProcedures(ctx context.Context, schema
 }
 
 // etSchemaIndexes fetches index definitions from the PostgreSQL database.
-func (p *PostgresServer) GetPostgresSchemaIndexes(ctx context.Context, schema string) ([]*PostgresIndexDefinition, error) {
+func (p *PostgresServer) getSchemaIndexes(ctx context.Context, schema string) ([]*PostgresIndexDefinition, error) {
 	// SQL query to fetch index details
 	sqlQuery := fmt.Sprintf(`
 		SELECT 
@@ -749,8 +810,8 @@ func (p *PostgresServer) GetPostgresSchemaIndexes(ctx context.Context, schema st
 	return indexes, nil
 }
 
-// p.GetPostgresSchemaTriggers fetches trigger definitions for the specified schema.
-func (p *PostgresServer) GetPostgresSchemaTriggers(ctx context.Context, schema string) ([]*PostgresTriggerDefinition, error) {
+// p.getSchemaTriggers fetches trigger definitions for the specified schema.
+func (p *PostgresServer) getSchemaTriggers(ctx context.Context, schema string) ([]*PostgresTriggerDefinition, error) {
 	query := `
 		SELECT 
 			t.trigger_name AS name,
@@ -789,7 +850,7 @@ func (p *PostgresServer) GetPostgresSchemaTriggers(ctx context.Context, schema s
 }
 
 // getServerConfigurations retrieves PostgreSQL server configurations
-func (p *PostgresServer) getPostgresServerConfigurations(ctx context.Context) ([]*PostgresServerInfo_Configuration, error) {
+func (p *PostgresServer) getServerConfigurations(ctx context.Context) ([]*PostgresServerInfo_Configuration, error) {
 	query := `
 		SELECT 
 			name, 
@@ -861,7 +922,7 @@ func (p *PostgresServer) getSchameComment(ctx context.Context, schema string) (s
 
 // Helper functions:
 
-func (p *PostgresServer) postgresIsPrimary(indexes []*PostgresIndexDefinition, tableName, columnName string) bool {
+func (p *PostgresServer) isPrimary(indexes []*PostgresIndexDefinition, tableName, columnName string) bool {
 	for _, index := range indexes {
 		if index.TableName == tableName && contains(index.ColumnNames, columnName) && index.ConstraintType == "PRIMARY KEY" {
 			return true
@@ -870,7 +931,7 @@ func (p *PostgresServer) postgresIsPrimary(indexes []*PostgresIndexDefinition, t
 	return false
 }
 
-func (p *PostgresServer) postgresIsUnique(indexes []*PostgresIndexDefinition, tableName, columnName string) bool {
+func (p *PostgresServer) isUnique(indexes []*PostgresIndexDefinition, tableName, columnName string) bool {
 	for _, index := range indexes {
 		if index.TableName == tableName && contains(index.ColumnNames, columnName) && index.ConstraintType == "UNIQUE" {
 			return true
@@ -879,7 +940,7 @@ func (p *PostgresServer) postgresIsUnique(indexes []*PostgresIndexDefinition, ta
 	return false
 }
 
-func (p *PostgresServer) postgresFilterForeignKeys(foreignKeys []*PostgresForeignKeyDefinition, tableName, columnName string) []*PostgresForeignKeyDefinition {
+func (p *PostgresServer) filterForeignKeys(foreignKeys []*PostgresForeignKeyDefinition, tableName, columnName string) []*PostgresForeignKeyDefinition {
 	var result []*PostgresForeignKeyDefinition
 	for _, fk := range foreignKeys {
 		if fk.TableName == tableName && (fk.ColumnName == columnName || columnName == "") {
@@ -889,7 +950,7 @@ func (p *PostgresServer) postgresFilterForeignKeys(foreignKeys []*PostgresForeig
 	return result
 }
 
-func (p *PostgresServer) postgresFilterColumns(columns []*PostgresColumnDefinition, tableName string) []*PostgresColumnDefinition {
+func (p *PostgresServer) filterColumns(columns []*PostgresColumnDefinition, tableName string) []*PostgresColumnDefinition {
 	var result []*PostgresColumnDefinition
 	for _, column := range columns {
 		if column.TableName == tableName {
@@ -899,7 +960,7 @@ func (p *PostgresServer) postgresFilterColumns(columns []*PostgresColumnDefiniti
 	return result
 }
 
-func (p *PostgresServer) postgresFilterIndexes(indexes []*PostgresIndexDefinition, tableName string, columnName string) []*PostgresIndexDefinition {
+func (p *PostgresServer) filterIndexes(indexes []*PostgresIndexDefinition, tableName string, columnName string) []*PostgresIndexDefinition {
 	var result []*PostgresIndexDefinition
 	for _, index := range indexes {
 		if index.TableName == tableName && (contains(index.ColumnNames, columnName) || columnName == "") {
@@ -909,7 +970,7 @@ func (p *PostgresServer) postgresFilterIndexes(indexes []*PostgresIndexDefinitio
 	return result
 }
 
-func (p *PostgresServer) postgresFilterTriggers(triggers []*PostgresTriggerDefinition, tableName string) []*PostgresTriggerDefinition {
+func (p *PostgresServer) filterTriggers(triggers []*PostgresTriggerDefinition, tableName string) []*PostgresTriggerDefinition {
 	var result []*PostgresTriggerDefinition
 	for _, trigger := range triggers {
 		if trigger.TableName == tableName {

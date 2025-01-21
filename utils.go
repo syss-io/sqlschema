@@ -1,4 +1,4 @@
-package sql_schema
+package sqlschema
 
 func contains(slice []string, item string) bool {
 	for _, s := range slice {

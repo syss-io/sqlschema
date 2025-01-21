@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package syss.sqlschema.v1;
 
-option go_package = "github.com/syss-io/sql-schema";
+option go_package = "github.com/syss-io/sqlschema";
 
 message PostgresServerInfo {
   message Configuration {
