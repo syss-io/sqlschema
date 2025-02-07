@@ -702,11 +702,7 @@ func (p *PostgresServer) getSchemaColumns(ctx context.Context, schema string, fo
 }
 
 func (p *PostgresServer) getSchemaProcedures(ctx context.Context, schema string) ([]*PostgresProcedureDefinition, error) {
-<<<<<<< HEAD
-	sqlQuery := `
-=======
 	query := `
->>>>>>> ccbc083 (add logger)
 		SELECT 
 			r.routine_name AS procedure_name,
 			r.routine_definition AS definition
