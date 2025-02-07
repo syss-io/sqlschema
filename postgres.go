@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type PostgresServer struct {
@@ -131,128 +129,58 @@ func (p *PostgresServer) DescribeSchema(ctx context.Context, schema string) (*Po
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(1)
+	schemaForeignKeys, err := p.getSchemaForeignKeys(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema foreign keys: %w", err)
+	}
 
-	var (
-		schemaForeignKeys []*PostgresForeignKeyDefinition
-		schemaFunctions   []*PostgresFunctionDefinition
-		schemaProcedures  []*PostgresProcedureDefinition
-		schemaIndexes     []*PostgresIndexDefinition
-		schemaTriggers    []*PostgresTriggerDefinition
-		schemaTables      []*PostgresTableDefinition
-		schemaViews       []*PostgresViewDefinition
-		schemaMatViews    []*PostgresMaterializedViewDefinition
-		schemaComment     string
-	)
+	schemaFunctions, err := p.getSchemaFunctions(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema functions: %w", err)
+	}
 
-	// Fetch schema foreign keys..
-	g.Go(func() error {
-		foreignKeys, err := p.getSchemaForeignKeys(gctx, schema)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema foreign keys: %w", err)
-		}
+	schemaProcedures, err := p.getSchemaProcedures(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema procedures: %w", err)
+	}
 
-		schemaForeignKeys = foreignKeys
-		return nil
-	})
+	schemaTriggers, err := p.getSchemaTriggers(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema triggers: %w", err)
+	}
 
-	// Fetch schema functions..
-	g.Go(func() error {
-		functions, err := p.getSchemaFunctions(gctx, schema)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema functions: %w", err)
-		}
-
-		schemaFunctions = functions
-		return nil
-	})
-
-	// Fetch schema procedures..
-	g.Go(func() error {
-		procedures, err := p.getSchemaProcedures(gctx, schema)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema procedures: %w", err)
-		}
-
-		schemaProcedures = procedures
-		return nil
-	})
-
-	// Fetch schema triggers..
-	g.Go(func() error {
-		triggers, err := p.getSchemaTriggers(gctx, schema)
-
-		if err != nil {
-			return fmt.Errorf("can't fetch schema triggers: %w", err)
-		}
-
-		schemaTriggers = triggers
-		return nil
-	})
-
-	// Fetch schema indexes..
-	// g.Go(func() error {
-	// 	indexes, err := p.GetPostgresSchemaIndexes(ctx, schema)
+	// 	schemaTriggers , err := p.GetPostgresSchemaIndexes(ctx, schema)
 	// 	if err != nil {
 	// 		return fmt.Errorf("can't fetch schema indexes: %w", err)
 	// 	}
 
-	// 	schemaIndexes = indexes
-	// 	return nil
-	// })
-
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	columns, err := p.getSchemaColumns(ctx, schema, schemaForeignKeys, schemaIndexes)
+	columns, err := p.getSchemaColumns(ctx, schema, schemaForeignKeys, []*PostgresIndexDefinition{} /* schemaIndexes */)
 	if err != nil {
 		return nil, fmt.Errorf("can't fetch schema columns: %w", err)
 	}
 
 	// Fetch schema tables..
-	g.Go(func() error {
-		tables, err := p.getSchemaTables(ctx, schema, columns, schemaForeignKeys, schemaIndexes, schemaTriggers)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema tables: %w", err)
-		}
-
-		schemaTables = tables
-		return nil
-	})
+	schemaTables, err := p.getSchemaTables(ctx, schema, columns, schemaForeignKeys, []*PostgresIndexDefinition{}, schemaTriggers)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema tables: %w", err)
+	}
 
 	// fetch schema views..
-	g.Go(func() error {
-		views, err := p.getSchemaViews(ctx, schema, columns)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema views: %w", err)
-		}
-
-		schemaViews = views
-		return nil
-	})
+	schemaViews, err := p.getSchemaViews(ctx, schema, columns)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema views: %w", err)
+	}
 
 	// fetch schema materialised views
-	g.Go(func() error {
-		matViews, err := p.getSchemaMaterializedViews(ctx, schema, columns)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema materialized views: %w", err)
-		}
+	schemaMatViews, err := p.getSchemaMaterializedViews(ctx, schema, columns)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema materialized views: %w", err)
+	}
 
-		schemaMatViews = matViews
-		return nil
-	})
-
-	g.Go(func() error {
-		comment, err := p.getSchameComment(ctx, schema)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema comment: %w", err)
-		}
-
-		schemaComment = comment
-		return nil
-	})
+	schemaComment, err := p.getSchameComment(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema comment: %w", err)
+	}
 
 	return &PostgresSchemaDefinition{
 		SchemaName:        schema,
@@ -266,24 +194,12 @@ func (p *PostgresServer) DescribeSchema(ctx context.Context, schema string) (*Po
 }
 
 func (p *PostgresServer) DescribeSchemaTables(ctx context.Context, schema string) ([]*PostgresTableDefinition, error) {
-	var (
-		schemaForeignKeys []*PostgresForeignKeyDefinition
-		schemaIndexes     []*PostgresIndexDefinition
-		schemaTriggers    []*PostgresTriggerDefinition
-	)
-
-	g, gctx := errgroup.WithContext(ctx)
 
 	// Fetch schema foreign keys..
-	g.Go(func() error {
-		foreignKeys, err := p.getSchemaForeignKeys(gctx, schema)
-		if err != nil {
-			return fmt.Errorf("can't fetch schema foreign keys: %w", err)
-		}
-
-		schemaForeignKeys = foreignKeys
-		return nil
-	})
+	schemaForeignKeys, err := p.getSchemaForeignKeys(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema foreign keys: %w", err)
+	}
 
 	// Fetch schema indexes..
 	// g.Go(func() error {
@@ -297,27 +213,17 @@ func (p *PostgresServer) DescribeSchemaTables(ctx context.Context, schema string
 	// })
 
 	// Fetch schema triggers..
-	g.Go(func() error {
-		triggers, err := p.getSchemaTriggers(gctx, schema)
-
-		if err != nil {
-			return fmt.Errorf("can't fetch schema triggers: %w", err)
-		}
-
-		schemaTriggers = triggers
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
-		return nil, err
+	schemaTriggers, err := p.getSchemaTriggers(ctx, schema)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch schema triggers: %w", err)
 	}
 
-	columns, err := p.getSchemaColumns(ctx, schema, schemaForeignKeys, schemaIndexes)
+	columns, err := p.getSchemaColumns(ctx, schema, schemaForeignKeys, nil)
 	if err != nil {
 		return nil, fmt.Errorf("can't fetch schema columns: %w", err)
 	}
 
-	tables, err := p.getSchemaTables(ctx, schema, columns, schemaForeignKeys, schemaIndexes, schemaTriggers)
+	tables, err := p.getSchemaTables(ctx, schema, columns, schemaForeignKeys, nil, schemaTriggers)
 	if err != nil {
 		return nil, fmt.Errorf("can't fetch schema tables: %w", err)
 

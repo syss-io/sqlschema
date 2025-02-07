@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type MySQLServer struct {
@@ -73,16 +71,6 @@ func (m *MySQLServer) DescribeDatabase(ctx context.Context, name string) (*MySQL
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	g, gctx := errgroup.WithContext(ctx)
-
-	var (
-		schemaForeignKeys      []*MySQLForeignKeyDefinition
-		schemaFunctions        []*MySQLFunctionDefinition
-		schemaIndexes          []*MySQLIndexDefinition
-		schemaTriggers         []*MySQLTriggerDefinition
-		schemaStoredProcedures []*MySQLStoredProceduresDefinition
-	)
-
 	// fetch foreign keys ..
 	// TODO: make this work
 	// g.Go(func() error {
@@ -96,59 +84,35 @@ func (m *MySQLServer) DescribeDatabase(ctx context.Context, name string) (*MySQL
 	// })
 
 	// fetch functions ..
-	g.Go(func() error {
-		funcs, err := m.DescribeSchemaFunctions(gctx, name)
-		if err != nil {
-			return fmt.Errorf("can't fetch database functions: %w", err)
-		}
-
-		schemaFunctions = funcs
-		return nil
-	})
-
-	// fetch stored procedures
-	g.Go(func() error {
-		procs, err := m.DescribeSchemaStoredProcedures(gctx, name)
-		if err != nil {
-			return fmt.Errorf("can't fetch database stored procedures: %w", err)
-		}
-
-		schemaStoredProcedures = procs
-		return nil
-	})
-
-	// fetch triggers
-	g.Go(func() error {
-		triggers, err := m.DescribeSchemaTriggers(gctx, name)
-		if err != nil {
-			return fmt.Errorf("can't fetch triggers: %w", err)
-		}
-
-		schemaTriggers = triggers
-		return nil
-	})
-
-	// fetch indexes
-	g.Go(func() error {
-		indexes, err := m.DescribeSchemaIndexes(gctx, name)
-		if err != nil {
-			return fmt.Errorf("can't fetch database indexes: %w", err)
-		}
-
-		schemaIndexes = indexes
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
-		return nil, err
+	schemaFunctions, err := m.DescribeSchemaFunctions(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch database functions: %w", err)
 	}
 
-	schemaColumns, err := m.DescribeSchemaColumns(ctx, name, schemaForeignKeys, schemaIndexes)
+	// fetch stored procedures
+	schemaStoredProcedures, err := m.DescribeSchemaStoredProcedures(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch database stored procedures: %w", err)
+	}
+
+	// fetch triggers
+	schemaTriggers, err := m.DescribeSchemaTriggers(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch triggers: %w", err)
+	}
+
+	// fetch indexes
+	schemaIndexes, err := m.DescribeSchemaIndexes(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch database indexes: %w", err)
+	}
+
+	schemaColumns, err := m.DescribeSchemaColumns(ctx, name, nil, schemaIndexes)
 	if err != nil {
 		return nil, fmt.Errorf("can't fetch columns: %w", err)
 	}
 
-	tables, err := m.DescribeSchemaTables(ctx, name, schemaForeignKeys, schemaIndexes, schemaColumns)
+	tables, err := m.DescribeSchemaTables(ctx, name, nil, schemaIndexes, schemaColumns)
 	if err != nil {
 		return nil, fmt.Errorf("can't fetch tables: %w", err)
 	}
