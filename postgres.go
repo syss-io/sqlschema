@@ -14,11 +14,16 @@ import (
 )
 
 type PostgresServer struct {
-	conn DB
+	conn   DB
+	logger *slog.Logger
 }
 
-func Postgres(conn DB) *PostgresServer {
-	return &PostgresServer{conn}
+func Postgres(conn DB, logger *slog.Logger) *PostgresServer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	return &PostgresServer{conn, logger}
 }
 
 // DescribePostgresServer fetches Postgres server full version, version number and
@@ -33,8 +38,12 @@ func (p *PostgresServer) DescribeServer(ctx context.Context) (*PostgresServerInf
 			regexp_replace(version(), '([0-9]+\.[0-9]+).*', '\1') AS versionShort
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	var versionFull, versionNumber string
 	if err := p.conn.QueryRowContext(ctx, query).Scan(&versionFull, &versionNumber); err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("failed to get version information: %w", err)
 	}
 
@@ -61,8 +70,12 @@ func (p *PostgresServer) DescribeServer(ctx context.Context) (*PostgresServerInf
 func (p *PostgresServer) DescribeAvailableDatabases(ctx context.Context) ([]string, error) {
 	query := "SELECT datname FROM pg_database;"
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	rows, err := p.conn.QueryContext(ctx, query)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("failed to fetch databases: %w", err)
 	}
 	defer rows.Close()
@@ -88,9 +101,12 @@ func (p *PostgresServer) DescribeAvailableDatabases(ctx context.Context) ([]stri
 // See https://www.postgresql.org/docs/current/infoschema-schemata.html
 func (p *PostgresServer) DescribeAvailableSchemas(ctx context.Context, database string) ([]string, error) {
 	query := "SELECT schema_name FROM information_schema.schemata WHERE catalog_name = $1;"
+	p.logger.Info("execute postgres query", slog.String("query", query))
 
 	rows, err := p.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("failed to fetch schemas: %w", err)
 	}
 	defer rows.Close()
@@ -321,8 +337,12 @@ func (p *PostgresServer) getSchemaTables(ctx context.Context, schema string, col
 			AND table_type = 'BASE TABLE';
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("querying tables: %w", err)
 	}
 	defer rows.Close()
@@ -378,9 +398,13 @@ func (p *PostgresServer) getSchemaFunctions(ctx context.Context, schema string) 
 		WHERE 
 			r.routine_schema = $1 AND r.routine_type = 'FUNCTION';`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	// Execute the query with the provided schema
 	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("failed to fetch functions: %w", err)
 	}
 	defer rows.Close()
@@ -405,7 +429,7 @@ func (p *PostgresServer) getSchemaFunctions(ctx context.Context, schema string) 
 // p.getSchemaForeignKeys fetches foreign keys for a given schema from the PostgreSQL database.
 func (p *PostgresServer) getSchemaForeignKeys(ctx context.Context, schema string) ([]*PostgresForeignKeyDefinition, error) {
 	// Define the query
-	sqlQuery := `
+	query := `
 		SELECT
 			tc.table_schema, 
 			tc.constraint_name, 
@@ -430,9 +454,13 @@ func (p *PostgresServer) getSchemaForeignKeys(ctx context.Context, schema string
 			AND tc.table_schema = rc.constraint_schema
 		WHERE tc.table_schema=$1 AND tc.constraint_type='FOREIGN KEY';`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	// Execute the query
-	rows, err := p.conn.QueryContext(ctx, sqlQuery, schema)
+	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -505,8 +533,12 @@ func (p *PostgresServer) getSchemaViews(ctx context.Context, schema string, colu
 			AND t.table_type = 'VIEW';
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("querying views: %w", err)
 	}
 	defer rows.Close()
@@ -550,8 +582,12 @@ func (p *PostgresServer) getSchemaMaterializedViews(ctx context.Context, schema 
 			mv.schemaname = $1;
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("querying materialized views: %w", err)
 	}
 	defer rows.Close()
@@ -609,8 +645,12 @@ func (p *PostgresServer) getSchemaColumns(ctx context.Context, schema string, fo
 			c.relname, a.attnum;
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("querying columns: %w", err)
 	}
 	defer rows.Close()
@@ -662,7 +702,11 @@ func (p *PostgresServer) getSchemaColumns(ctx context.Context, schema string, fo
 }
 
 func (p *PostgresServer) getSchemaProcedures(ctx context.Context, schema string) ([]*PostgresProcedureDefinition, error) {
+<<<<<<< HEAD
 	sqlQuery := `
+=======
+	query := `
+>>>>>>> ccbc083 (add logger)
 		SELECT 
 			r.routine_name AS procedure_name,
 			r.routine_definition AS definition
@@ -672,8 +716,12 @@ func (p *PostgresServer) getSchemaProcedures(ctx context.Context, schema string)
 			r.routine_schema = $1 
 			AND r.routine_type = 'PROCEDURE';`
 
-	rows, err := p.conn.QueryContext(ctx, sqlQuery, schema)
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
+	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("error querying database: %v", err)
 	}
 	defer rows.Close()
@@ -698,7 +746,7 @@ func (p *PostgresServer) getSchemaProcedures(ctx context.Context, schema string)
 // etSchemaIndexes fetches index definitions from the PostgreSQL database.
 func (p *PostgresServer) getSchemaIndexes(ctx context.Context, schema string) ([]*PostgresIndexDefinition, error) {
 	// SQL query to fetch index details
-	sqlQuery := fmt.Sprintf(`
+	query := fmt.Sprintf(`
 		SELECT 
 			ix.relname AS index_name,
 			UPPER(am.amname) AS index_algorithm,
@@ -762,8 +810,12 @@ func (p *PostgresServer) getSchemaIndexes(ctx context.Context, schema string) ([
 		WHERE n.nspname = %s
 		GROUP BY ix.relname, am.amname, i.indisunique, i.indexrelid, t.relname, constraint_type;`, schema)
 
-	rows, err := p.conn.QueryContext(ctx, sqlQuery, schema)
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
+	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -826,8 +878,12 @@ func (p *PostgresServer) getSchemaTriggers(ctx context.Context, schema string) (
 			t.trigger_schema = $1;
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("querying triggers: %w", err)
 	}
 	defer rows.Close()
@@ -862,8 +918,12 @@ func (p *PostgresServer) getServerConfigurations(ctx context.Context) ([]*Postgr
 			pg_settings;
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	rows, err := p.conn.QueryContext(ctx, query)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("failed to fetch configurations: %w", err)
 	}
 	defer rows.Close()
@@ -897,9 +957,13 @@ func (p *PostgresServer) getSchameComment(ctx context.Context, schema string) (s
 			n.nspname = $1;
 	`
 
+	p.logger.Info("execute postgres query", slog.String("query", query))
+
 	// Execute the query
 	rows, err := p.conn.QueryContext(ctx, query, schema)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return "", err
 	}
 	defer rows.Close()

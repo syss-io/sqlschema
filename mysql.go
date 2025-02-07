@@ -11,11 +11,16 @@ import (
 )
 
 type MySQLServer struct {
-	conn DB
+	conn   DB
+	logger *slog.Logger
 }
 
-func MySQL(conn DB) *MySQLServer {
-	return &MySQLServer{conn}
+func MySQL(conn DB, logger *slog.Logger) *MySQLServer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	return &MySQLServer{conn, logger}
 }
 
 func (m *MySQLServer) DescribeServer(ctx context.Context) (*MySQLServerInfo, error) {
@@ -38,8 +43,12 @@ func (m *MySQLServer) DescribeServer(ctx context.Context) (*MySQLServerInfo, err
 func (m *MySQLServer) DescribeAvailableDatabases(ctx context.Context) ([]string, error) {
 	query := "SHOW DATABASES;"
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, fmt.Errorf("failed to fetch databases: %w", err)
 	}
 	defer rows.Close()
@@ -181,8 +190,12 @@ func (m *MySQLServer) DescribeForeignKeys(ctx context.Context, database string) 
 		AND kcu.REFERENCED_TABLE_NAME IS NOT NULL;
 	`
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -228,8 +241,12 @@ func (m *MySQLServer) DescribeSchemaColumns(ctx context.Context, database string
 		table_schema = ?;
 	`
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -275,8 +292,12 @@ func (m *MySQLServer) DescribeSchemaTables(ctx context.Context, database string,
 		table_schema = ?;
 	`
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -312,8 +333,12 @@ func (m *MySQLServer) DescribeSchemaViews(ctx context.Context, database string, 
 		table_schema = ?;
 	`
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -363,8 +388,12 @@ func (m *MySQLServer) DescribeSchemaIndexes(ctx context.Context, database string
 		index_name;
 	`
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -405,8 +434,12 @@ func (m *MySQLServer) DescribeSchemaTriggers(ctx context.Context, databaseName s
             TRIGGER_SCHEMA = ?;
     `
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, databaseName)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -446,8 +479,12 @@ func (m *MySQLServer) DescribeSchemaFunctions(ctx context.Context, database stri
 		AND ROUTINE_SCHEMA = ?
 	`
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
@@ -484,8 +521,12 @@ func (m *MySQLServer) DescribeSchemaStoredProcedures(ctx context.Context, databa
 		AND ROUTINE_SCHEMA = ?
 	`
 
+	m.logger.Info("execute mysql query", slog.String("query", query))
+
 	rows, err := m.conn.QueryContext(ctx, query, database)
 	if err != nil {
+		slog.Error("query execution error", slog.String("error", err.Error()))
+
 		return nil, err
 	}
 	defer rows.Close()
