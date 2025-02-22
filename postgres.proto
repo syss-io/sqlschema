@@ -4,7 +4,7 @@ package syss.sqlschema.v1;
 
 option go_package = "github.com/syss-io/sqlschema";
 
-message PostgresServerInfo {
+message PostgreSQLServerInfo {
   message Configuration {
     string name = 1;
     string category = 2;
@@ -18,33 +18,33 @@ message PostgresServerInfo {
   repeated Configuration configurations = 3;
 }
 
-message PostgresDatabase {
+message PostgreSQLDatabase {
   string name = 1;
-  repeated PostgresSchemaDefinition schemas = 2;
+  repeated PostgreSQLSchema schemas = 2;
 }
 
-message PostgresSchemaDefinition {
+message PostgresSchema {
   string schema_name = 1;
   string database_name = 2;
-  repeated PostgresTableDefinition tables = 3;
-  repeated PostgresFunctionDefinition functions = 4;
-  repeated PostgresProcedureDefinition procedures = 5;
-  repeated PostgresViewDefinition views = 6;
-  repeated PostgresMaterializedViewDefinition materialized_views = 7;
+  repeated PostgreSQLTable tables = 3;
+  repeated PostgreSQLFunction functions = 4;
+  repeated PostgreSQLProcedure procedures = 5;
+  repeated PostgreSQLView views = 6;
+  repeated PostgreSQLMaterializedView materialized_views = 7;
   optional string comment = 8;
 } 
 
-message PostgresTableDefinition {
+message PostgreSQLTable {
   string schema_name = 1;
   string table_name = 2;
-  repeated PostgresColumnDefinition columns = 3;
-  repeated PostgresForeignKeyDefinition foreign_keys = 4;
-  repeated PostgresIndexDefinition indexes = 5;
-  repeated PostgresTriggerDefinition triggers = 6;
+  repeated ColumnDefinition columns = 3;
+  repeated PostgreSQLForeignKey foreign_keys = 4;
+  repeated PostgresIndex indexes = 5;
+  repeated PostgreSQLTrigger triggers = 6;
   optional string comment = 7;
 }
 
-message PostgresColumnDefinition {
+message PostgreSQLColumn {
   string schema_name = 1;
   string table_name = 2;
   string column_name = 3;
@@ -56,11 +56,11 @@ message PostgresColumnDefinition {
   bool is_autoincrement = 9;
   optional int64 character_maximum_length = 10;
   optional string comment = 11;
-  repeated PostgresForeignKeyDefinition foreign_keys = 12;
-  repeated PostgresIndexDefinition indexes = 13;
+  repeated PostgreSQLForeignKey foreign_keys = 12;
+  repeated PostgresIndex indexes = 13;
 }
 
-message PostgresForeignKeyDefinition {
+message PostgreSQLForeignKey {
   string schema_name = 1;
   string table_name = 2;
   string column_name = 3;
@@ -73,7 +73,7 @@ message PostgresForeignKeyDefinition {
   bool is_initially_deferred = 10;
 }
 
-message PostgresIndexDefinition {
+message PostgreSQLIndexDefinition {
   string schema_name = 1;
   string table_name = 2;
   string index_name = 3;
@@ -89,7 +89,7 @@ message PostgresIndexDefinition {
   string comment = 13;
 }
 
-message PostgresFunctionDefinition {
+message PostgreSQLFunction {
   message Argument {
     string name = 1;
     string type = 2;
@@ -108,7 +108,7 @@ message PostgresFunctionDefinition {
   optional string comment = 7;
 }
 
-message PostgresProcedureDefinition {
+message PostgreSQLProcedure {
   message Argument {
     string name = 1;
     string type = 2;
@@ -127,7 +127,7 @@ message PostgresProcedureDefinition {
 }
 
 
-message PostgresTriggerDefinition {
+message PostgreSQLTrigger {
   string schema_name = 1;
   string table_name = 2;
   string trigger_name = 3;
@@ -138,17 +138,17 @@ message PostgresTriggerDefinition {
   optional string comment = 8;
 }
 
-message PostgresViewDefinition {
+message PostgreSQLView {
   string schema_name = 1;
   string table_name = 2;
   string definition = 3;
-  repeated PostgresColumnDefinition columns = 4;
+  repeated ColumnDefinition columns = 4;
   bool is_updatable = 5;
 }
 
-message PostgresMaterializedViewDefinition {
+message PostgreSQLMaterializedView {
   string schema_name = 1;
   string table_name = 2;
   string definition = 3;
-  repeated PostgresColumnDefinition columns = 4;
+  repeated ColumnDefinition columns = 4;
 }

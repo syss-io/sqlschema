@@ -14,16 +14,16 @@ message MySQLServerInfo {
     repeated Configuration configurations = 3;
 }
 
-message MySQLDatabaseDefinition {
+message MySQLDatabase {
     string database_name = 1;
-    repeated MySQLTableDefinition tables = 2;
-    repeated MySQLFunctionDefinition functions = 3;
-    repeated MySQLStoredProceduresDefinition stored_procedures = 4;
-    repeated MySQLTriggerDefinition triggers = 5;
-    repeated MySQLViewDefinition views = 6;
+    repeated MySQLTable tables = 2;
+    repeated MySQLFunction functions = 3;
+    repeated MySQLStoredProcedures stored_procedures = 4;
+    repeated MySQLTrigger triggers = 5;
+    repeated MySQLView views = 6;
 }
 
-message MySQLTriggerDefinition {
+message MySQLTrigger {
     string database_name = 1;
     string table_name = 2;
     string trigger_name = 3;
@@ -33,7 +33,7 @@ message MySQLTriggerDefinition {
     string action_statement = 7;
 }
 
-message MySQLFunctionDefinition {
+message MySQLFunction {
     string database_name = 1;
     string function_name = 2;
     string return_type = 3;
@@ -43,7 +43,7 @@ message MySQLFunctionDefinition {
     string comment = 9;
 }
 
-message MySQLStoredProceduresDefinition {
+message MySQLStoredProcedures {
     string database_name = 1;
     string procedure_name = 2;
     string definition = 3;
@@ -51,7 +51,7 @@ message MySQLStoredProceduresDefinition {
     string comment = 5;
 }
 
-message MySQLForeignKeyDefinition {
+message MySQLForeignKey {
     string database_name = 1;
     string table_name = 2;
     string column_name = 3;
@@ -62,7 +62,7 @@ message MySQLForeignKeyDefinition {
     string on_delete = 8;
 }
 
-message MySQLIndexDefinition {
+message MySQLIndex {
     string database_name = 1;
     string table_name = 2;
     string index_name = 3;
@@ -75,7 +75,7 @@ message MySQLIndexDefinition {
     optional string comment = 10;
 }
 
-message MySQLColumnDefinition {
+message MySQLColumn {
     string table_name = 1;
     string name = 2;
     string type = 3;
@@ -85,27 +85,27 @@ message MySQLColumnDefinition {
     string collation = 7;
     string extra = 8;
     string comment = 9;
-    repeated MySQLForeignKeyDefinition foreign_keys = 10;
-    repeated MySQLIndexDefinition indexes = 11;
+    repeated MySQLForeignKey foreign_keys = 10;
+    repeated MySQLIndex indexes = 11;
 }
 
-message MySQLViewDefinition {
+message MySQLView {
     string database_name = 1;
     string view_name = 2;
     string definition = 3;
-    repeated MySQLColumnDefinition columns = 4;
+    repeated MySQLColumn columns = 4;
     bool is_updatable = 5;
 }
 
-message MySQLTableDefinition {
+message MySQLTable {
     string database_name = 1;
     string table_name = 2;
-    repeated MySQLColumnDefinition columns = 3;
-    repeated MySQLIndexDefinition indexes = 4;
-    repeated MySQLForeignKeyDefinition foreign_keys = 5;
-    repeated MySQLTriggerDefinition triggers = 6;
-    repeated MySQLFunctionDefinition functions = 7;
-    repeated MySQLStoredProceduresDefinition stored_procedures = 8;
-    repeated MySQLViewDefinition views = 9;
+    repeated MySQLColumn columns = 3;
+    repeated MySQLIndex indexes = 4;
+    repeated MySQLForeignKey foreign_keys = 5;
+    repeated MySQLTrigger triggers = 6;
+    repeated MySQLFunction functions = 7;
+    repeated MySQLStoredProcedures stored_procedures = 8;
+    repeated MySQLView views = 9;
     string comment = 10;
 }

@@ -99,7 +99,8 @@ func (p *PostgresServer) DescribeAvailableDatabases(ctx context.Context) ([]stri
 // See https://www.postgresql.org/docs/current/infoschema-schemata.html
 func (p *PostgresServer) DescribeAvailableSchemas(ctx context.Context, database string) ([]string, error) {
 	query := "SELECT schema_name FROM information_schema.schemata WHERE catalog_name = $1;"
-	p.logger.Info("execute postgres query", slog.String("query", query))
+
+	p.logger.Info("execute postgres query", slog.String("query", query), slog.String("database", database))
 
 	rows, err := p.conn.QueryContext(ctx, query, database)
 	if err != nil {
