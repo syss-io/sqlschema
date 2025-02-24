@@ -67,7 +67,7 @@ func (m *MySQLServer) DescribeAvailableDatabases(ctx context.Context) ([]string,
 	return databases, nil
 }
 
-func (m *MySQLServer) DescribeDatabase(ctx context.Context, name string) (*MySQLDatabaseDefinition, error) {
+func (m *MySQLServer) DescribeDatabase(ctx context.Context, name string) (*MySQLDatabase, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -122,7 +122,7 @@ func (m *MySQLServer) DescribeDatabase(ctx context.Context, name string) (*MySQL
 		return nil, fmt.Errorf("can't fetch views: %w", err)
 	}
 
-	return &MySQLDatabaseDefinition{
+	return &MySQLDatabase{
 		DatabaseName:     name,
 		Tables:           tables,
 		Functions:        schemaFunctions,
@@ -132,7 +132,7 @@ func (m *MySQLServer) DescribeDatabase(ctx context.Context, name string) (*MySQL
 	}, nil
 }
 
-func (m *MySQLServer) DescribeForeignKeys(ctx context.Context, database string) ([]*MySQLForeignKeyDefinition, error) {
+func (m *MySQLServer) DescribeForeignKeys(ctx context.Context, database string) ([]*MySQLForeignKey, error) {
 	query := `
 	SELECT
 		kcu.CONSTRAINT_NAME,
@@ -164,9 +164,9 @@ func (m *MySQLServer) DescribeForeignKeys(ctx context.Context, database string) 
 	}
 	defer rows.Close()
 
-	var foreignKeys []*MySQLForeignKeyDefinition
+	var foreignKeys []*MySQLForeignKey
 	for rows.Next() {
-		var fk MySQLForeignKeyDefinition
+		var fk MySQLForeignKey
 		err := rows.Scan(
 			&fk.ConstraintName,
 			&fk.TableName,
@@ -186,7 +186,7 @@ func (m *MySQLServer) DescribeForeignKeys(ctx context.Context, database string) 
 	return foreignKeys, nil
 }
 
-func (m *MySQLServer) DescribeSchemaColumns(ctx context.Context, database string, foreignKeys []*MySQLForeignKeyDefinition, indexes []*MySQLIndexDefinition) ([]*MySQLColumnDefinition, error) {
+func (m *MySQLServer) DescribeSchemaColumns(ctx context.Context, database string, foreignKeys []*MySQLForeignKey, indexes []*MySQLIndex) ([]*MySQLColumn, error) {
 	query := `
 	SELECT
 		-- ordinal_position AS ordinal_position,
@@ -215,9 +215,9 @@ func (m *MySQLServer) DescribeSchemaColumns(ctx context.Context, database string
 	}
 	defer rows.Close()
 
-	var columns []*MySQLColumnDefinition
+	var columns []*MySQLColumn
 	for rows.Next() {
-		var col MySQLColumnDefinition
+		var col MySQLColumn
 		var isNullable string
 		err := rows.Scan(
 			&col.TableName,
@@ -247,7 +247,7 @@ func (m *MySQLServer) DescribeSchemaColumns(ctx context.Context, database string
 	return columns, nil
 }
 
-func (m *MySQLServer) DescribeSchemaTables(ctx context.Context, database string, foreignKeys []*MySQLForeignKeyDefinition, indexes []*MySQLIndexDefinition, columns []*MySQLColumnDefinition) ([]*MySQLTableDefinition, error) {
+func (m *MySQLServer) DescribeSchemaTables(ctx context.Context, database string, foreignKeys []*MySQLForeignKey, indexes []*MySQLIndex, columns []*MySQLColumn) ([]*MySQLTable, error) {
 	query := `
 	SELECT table_name
 	FROM
@@ -266,9 +266,9 @@ func (m *MySQLServer) DescribeSchemaTables(ctx context.Context, database string,
 	}
 	defer rows.Close()
 
-	var tables []*MySQLTableDefinition
+	var tables []*MySQLTable
 	for rows.Next() {
-		var table MySQLTableDefinition
+		var table MySQLTable
 		err := rows.Scan(&table.TableName)
 		if err != nil {
 			return nil, err
@@ -288,7 +288,7 @@ func (m *MySQLServer) DescribeSchemaTables(ctx context.Context, database string,
 	return tables, nil
 }
 
-func (m *MySQLServer) DescribeSchemaViews(ctx context.Context, database string, columns []*MySQLColumnDefinition) ([]*MySQLViewDefinition, error) {
+func (m *MySQLServer) DescribeSchemaViews(ctx context.Context, database string, columns []*MySQLColumn) ([]*MySQLView, error) {
 	query := `
 	SELECT TABLE_NAME, VIEW_DEFINITION, IS_UPDATABLE
 	FROM
@@ -307,10 +307,10 @@ func (m *MySQLServer) DescribeSchemaViews(ctx context.Context, database string, 
 	}
 	defer rows.Close()
 
-	var views []*MySQLViewDefinition
+	var views []*MySQLView
 	for rows.Next() {
 		var isUpdatable string
-		var view MySQLViewDefinition
+		var view MySQLView
 		err := rows.Scan(
 			&view.ViewName,
 			&view.Definition,
@@ -332,7 +332,7 @@ func (m *MySQLServer) DescribeSchemaViews(ctx context.Context, database string, 
 	return views, nil
 }
 
-func (m *MySQLServer) DescribeSchemaIndexes(ctx context.Context, database string) ([]*MySQLIndexDefinition, error) {
+func (m *MySQLServer) DescribeSchemaIndexes(ctx context.Context, database string) ([]*MySQLIndex, error) {
 	query := `
 	SELECT
 		index_name,
@@ -362,9 +362,9 @@ func (m *MySQLServer) DescribeSchemaIndexes(ctx context.Context, database string
 	}
 	defer rows.Close()
 
-	var indexes []*MySQLIndexDefinition
+	var indexes []*MySQLIndex
 	for rows.Next() {
-		var idx MySQLIndexDefinition
+		var idx MySQLIndex
 		var columnNames string
 		err := rows.Scan(
 			&idx.IndexName,
@@ -383,7 +383,7 @@ func (m *MySQLServer) DescribeSchemaIndexes(ctx context.Context, database string
 	return indexes, nil
 }
 
-func (m *MySQLServer) DescribeSchemaTriggers(ctx context.Context, databaseName string) ([]*MySQLTriggerDefinition, error) {
+func (m *MySQLServer) DescribeSchemaTriggers(ctx context.Context, databaseName string) ([]*MySQLTrigger, error) {
 	query := `
         SELECT
             TRIGGER_SCHEMA,
@@ -408,9 +408,9 @@ func (m *MySQLServer) DescribeSchemaTriggers(ctx context.Context, databaseName s
 	}
 	defer rows.Close()
 
-	var triggers []*MySQLTriggerDefinition
+	var triggers []*MySQLTrigger
 	for rows.Next() {
-		var trigger MySQLTriggerDefinition
+		var trigger MySQLTrigger
 		err := rows.Scan(
 			&trigger.DatabaseName,
 			&trigger.TriggerName,
@@ -428,7 +428,7 @@ func (m *MySQLServer) DescribeSchemaTriggers(ctx context.Context, databaseName s
 	return triggers, nil
 }
 
-func (m *MySQLServer) DescribeSchemaFunctions(ctx context.Context, database string) ([]*MySQLFunctionDefinition, error) {
+func (m *MySQLServer) DescribeSchemaFunctions(ctx context.Context, database string) ([]*MySQLFunction, error) {
 	query := `
 	SELECT 
 		ROUTINE_SCHEMA,
@@ -453,9 +453,9 @@ func (m *MySQLServer) DescribeSchemaFunctions(ctx context.Context, database stri
 	}
 	defer rows.Close()
 
-	var functions []*MySQLFunctionDefinition
+	var functions []*MySQLFunction
 	for rows.Next() {
-		var funcDef MySQLFunctionDefinition
+		var funcDef MySQLFunction
 		err := rows.Scan(
 			&funcDef.DatabaseName,
 			&funcDef.FunctionName,
@@ -471,7 +471,7 @@ func (m *MySQLServer) DescribeSchemaFunctions(ctx context.Context, database stri
 	return functions, nil
 }
 
-func (m *MySQLServer) DescribeSchemaStoredProcedures(ctx context.Context, database string) ([]*MySQLStoredProceduresDefinition, error) {
+func (m *MySQLServer) DescribeSchemaStoredProcedures(ctx context.Context, database string) ([]*MySQLStoredProcedures, error) {
 	query := `
 	SELECT 
 		ROUTINE_SCHEMA,
@@ -495,9 +495,9 @@ func (m *MySQLServer) DescribeSchemaStoredProcedures(ctx context.Context, databa
 	}
 	defer rows.Close()
 
-	var procedures []*MySQLStoredProceduresDefinition
+	var procedures []*MySQLStoredProcedures
 	for rows.Next() {
-		var procDef MySQLStoredProceduresDefinition
+		var procDef MySQLStoredProcedures
 		err := rows.Scan(
 			&procDef.DatabaseName,
 			&procDef.ProcedureName,
@@ -539,8 +539,8 @@ func (m *MySQLServer) serverConfigurations(ctx context.Context) ([]*MySQLServerI
 
 // Helper funcs ..
 
-func (m *MySQLServer) filterForeignKeys(fks []*MySQLForeignKeyDefinition, colName string, dbName string) []*MySQLForeignKeyDefinition {
-	var filtered []*MySQLForeignKeyDefinition
+func (m *MySQLServer) filterForeignKeys(fks []*MySQLForeignKey, colName string, dbName string) []*MySQLForeignKey {
+	var filtered []*MySQLForeignKey
 	for _, fk := range fks {
 		if fk.ColumnName == colName && fk.DatabaseName == dbName {
 			filtered = append(filtered, fk)
@@ -549,8 +549,8 @@ func (m *MySQLServer) filterForeignKeys(fks []*MySQLForeignKeyDefinition, colNam
 	return filtered
 }
 
-func (m *MySQLServer) filterIndexes(idxs []*MySQLIndexDefinition, colName string, dbName string) []*MySQLIndexDefinition {
-	var filtered []*MySQLIndexDefinition
+func (m *MySQLServer) filterIndexes(idxs []*MySQLIndex, colName string, dbName string) []*MySQLIndex {
+	var filtered []*MySQLIndex
 	for _, idx := range idxs {
 		if contains(idx.ColumnNames, colName) && idx.DatabaseName == dbName {
 			filtered = append(filtered, idx)
@@ -559,8 +559,8 @@ func (m *MySQLServer) filterIndexes(idxs []*MySQLIndexDefinition, colName string
 	return filtered
 }
 
-func (m *MySQLServer) filterColumns(cols []*MySQLColumnDefinition, tableName string) []*MySQLColumnDefinition {
-	var filtered []*MySQLColumnDefinition
+func (m *MySQLServer) filterColumns(cols []*MySQLColumn, tableName string) []*MySQLColumn {
+	var filtered []*MySQLColumn
 	for _, col := range cols {
 		if col.TableName == tableName {
 			filtered = append(filtered, col)
@@ -569,8 +569,8 @@ func (m *MySQLServer) filterColumns(cols []*MySQLColumnDefinition, tableName str
 	return filtered
 }
 
-func (m *MySQLServer) filterForeignKeysByTable(fks []*MySQLForeignKeyDefinition, tableName string) []*MySQLForeignKeyDefinition {
-	var filtered []*MySQLForeignKeyDefinition
+func (m *MySQLServer) filterForeignKeysByTable(fks []*MySQLForeignKey, tableName string) []*MySQLForeignKey {
+	var filtered []*MySQLForeignKey
 	for _, fk := range fks {
 		if fk.TableName == tableName {
 			filtered = append(filtered, fk)
@@ -579,8 +579,8 @@ func (m *MySQLServer) filterForeignKeysByTable(fks []*MySQLForeignKeyDefinition,
 	return filtered
 }
 
-func (m *MySQLServer) filterIndexesByTable(idxs []*MySQLIndexDefinition, tableName string) []*MySQLIndexDefinition {
-	var filtered []*MySQLIndexDefinition
+func (m *MySQLServer) filterIndexesByTable(idxs []*MySQLIndex, tableName string) []*MySQLIndex {
+	var filtered []*MySQLIndex
 	for _, idx := range idxs {
 		if idx.TableName == tableName {
 			filtered = append(filtered, idx)
